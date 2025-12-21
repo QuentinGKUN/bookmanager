@@ -1,0 +1,27 @@
+version: '3.8'
+
+# 开发环境配置
+# SQLite 是文件数据库，不需要单独的数据库服务
+# 数据库文件将直接存储在项目目录中
+
+services:
+  # 可选：如果需要Redis等中间件，可以在这里添加
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: booksystem-redis
+  #   restart: always
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - booksystem-network
+
+# volumes:
+#   redis_data:
+
+networks:
+  booksystem-network:
+    driver: bridge
+
+
