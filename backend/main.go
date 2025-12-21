@@ -35,7 +35,7 @@ func main() {
 
 	// 初始化Hertz服务器
 	h := server.Default(
-		server.WithHostPorts(":8080"),
+		server.WithHostPorts(":8089"),
 	)
 
 	// 注册中间件
