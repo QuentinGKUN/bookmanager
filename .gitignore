@@ -6,6 +6,7 @@ vendor/
 dist/
 build/
 *.exe
+booksystem-linux-amd64
 
 # 数据库文件
 *.db
