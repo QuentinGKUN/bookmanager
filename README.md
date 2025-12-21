@@ -28,7 +28,7 @@ cd backend
 go run main.go
 ```
 
-后端服务运行在 `http://localhost:8080`
+后端服务运行在 `http://localhost:8089`
 
 ### 前端启动
 
