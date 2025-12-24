@@ -15,6 +15,7 @@ import (
 	"booksystem/internal/db"
 	"booksystem/internal/handler"
 	"booksystem/internal/middleware"
+	"booksystem/internal/service"
 )
 
 func main() {
@@ -33,6 +34,16 @@ func main() {
 		log.Fatal("Failed to migrate database:", err)
 	}
 
+	// 初始化Redis
+	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
+	redisPassword := getEnv("REDIS_PASSWORD", "")
+	redisDB := 0
+	redisService, err := service.NewRedisService(redisAddr, redisPassword, redisDB)
+	if err != nil {
+		log.Printf("Warning: Failed to connect to Redis: %v. Redis features will be disabled.", err)
+		redisService = nil
+	}
+
 	// 初始化Hertz服务器
 	h := server.Default(
 		server.WithHostPorts(":8089"),
@@ -42,20 +53,20 @@ func main() {
 	h.Use(middleware.CORS())
 
 	// 注册路由
-	registerRoutes(h, database)
+	registerRoutes(h, database, redisService)
 
 	// 启动服务器
 	h.Spin()
 }
 
-func registerRoutes(h *server.Hertz, db *gorm.DB) {
+func registerRoutes(h *server.Hertz, db *gorm.DB, redisService *service.RedisService) {
 	// 创建处理器
 	bookHandler := handler.NewBookHandler(db)
 	areaHandler := handler.NewAreaHandler(db)
 	bookshelfHandler := handler.NewBookshelfHandler(db)
 	shelfLayerHandler := handler.NewShelfLayerHandler(db)
 	locationHandler := handler.NewLocationHandler(db)
-	borrowHandler := handler.NewBorrowHandler(db)
+	borrowHandler := handler.NewBorrowHandler(db, redisService)
 
 	api := h.Group("/api/v1")
 	{
@@ -84,12 +95,26 @@ func registerRoutes(h *server.Hertz, db *gorm.DB) {
 
 		api.GET("/locations/tree", locationHandler.GetTree)
 
-		// 借阅管理
+		// 借阅管理（兼容旧接口）
 		api.POST("/borrow", borrowHandler.Create)
 		api.POST("/borrow/scan", borrowHandler.Scan)
 		api.GET("/borrow/records", borrowHandler.List)
 		api.POST("/borrow/get-borrower", borrowHandler.GetBorrowerByPhone)
 		api.POST("/borrow/return", borrowHandler.Return)
+
+		// 新的借阅API（使用Redis）
+		api.POST("/borrow/user", borrowHandler.SetBorrowUser)
+		api.GET("/borrow/user", borrowHandler.GetBorrowUser)
+		api.POST("/borrow/book", borrowHandler.AddBorrowBook)
+		api.DELETE("/borrow/book", borrowHandler.RemoveBorrowBook)
+		api.POST("/borrow/complete", borrowHandler.CompleteBorrow)
+
+		// 新的归还API（使用Redis）
+		api.POST("/return/user", borrowHandler.SetReturnUser)
+		api.GET("/return/user", borrowHandler.GetReturnUser)
+		api.POST("/return/book", borrowHandler.AddReturnBook)
+		api.DELETE("/return/book", borrowHandler.RemoveReturnBook)
+		api.POST("/return/complete", borrowHandler.CompleteReturn)
 	}
 
 	// 健康检查

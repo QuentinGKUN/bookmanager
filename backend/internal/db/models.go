@@ -37,38 +37,47 @@ type ShelfLayer struct {
 // Book 图书表
 type Book struct {
 	ID           int64      `gorm:"primaryKey;autoIncrement" json:"id"`
-	Barcode      string    `gorm:"type:varchar(100);not null;uniqueIndex" json:"barcode"`
-	Name         string    `gorm:"type:varchar(200);not null" json:"name"`
-	Quantity     int       `gorm:"not null;default:0" json:"quantity"`
-	InStock      int       `gorm:"not null;default:0" json:"in_stock"`
-	ShelfLayerID *int64    `gorm:"index" json:"shelf_layer_id,omitempty"`
+	Barcode      string     `gorm:"type:varchar(100);not null;uniqueIndex" json:"barcode"`
+	Name         string     `gorm:"type:varchar(200);not null" json:"name"`
+	Quantity     int        `gorm:"not null;default:0" json:"quantity"`
+	InStock      int        `gorm:"not null;default:0" json:"in_stock"`
+	ShelfLayerID *int64     `gorm:"index" json:"shelf_layer_id,omitempty"`
 	ShelfLayer   ShelfLayer `gorm:"foreignKey:ShelfLayerID" json:"shelf_layer,omitempty"`
-	Price        *float64  `gorm:"type:decimal(10,2)" json:"price,omitempty"`
-	Remark       *string   `gorm:"type:text" json:"remark,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	Price        *float64   `gorm:"type:decimal(10,2)" json:"price,omitempty"`
+	Remark       *string    `gorm:"type:text" json:"remark,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // BorrowRecord 借阅记录表
 type BorrowRecord struct {
-	ID           int64          `gorm:"primaryKey;autoIncrement" json:"id"`
-	BorrowerName string         `gorm:"type:varchar(50);not null" json:"borrower_name"`
-	BorrowerPhone string        `gorm:"type:varchar(20);not null;index" json:"borrower_phone"`
-	BorrowTime   time.Time      `gorm:"not null;index" json:"borrow_time"`
-	Status       int8           `gorm:"not null;default:1" json:"status"` // 1:借出，2:已归还
-	Details      []BorrowDetail `gorm:"foreignKey:BorrowRecordID" json:"details,omitempty"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
+	ID            int64          `gorm:"primaryKey;autoIncrement" json:"id"`
+	BorrowerName  string         `gorm:"type:varchar(50);not null" json:"borrower_name"`
+	BorrowerPhone string         `gorm:"type:varchar(20);not null;index" json:"borrower_phone"`
+	BorrowTime    time.Time      `gorm:"not null;index" json:"borrow_time"`
+	Status        int8           `gorm:"not null;default:1" json:"status"` // 1:借出，2:已归还
+	Details       []BorrowDetail `gorm:"foreignKey:BorrowRecordID" json:"details,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
 }
 
 // BorrowDetail 借阅明细表
 type BorrowDetail struct {
-	ID            int64        `gorm:"primaryKey;autoIncrement" json:"id"`
-	BorrowRecordID int64      `gorm:"not null;index" json:"borrow_record_id"`
-	BookID        *int64       `gorm:"index" json:"book_id,omitempty"`
-	Book          *Book        `gorm:"foreignKey:BookID" json:"book,omitempty"`
-	Barcode       string       `gorm:"type:varchar(100);not null;index" json:"barcode"`
-	CreatedAt     time.Time    `json:"created_at"`
+	ID             int64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	BorrowRecordID int64     `gorm:"not null;index" json:"borrow_record_id"`
+	BookID         *int64    `gorm:"index" json:"book_id,omitempty"`
+	Book           *Book     `gorm:"foreignKey:BookID" json:"book,omitempty"`
+	Barcode        string    `gorm:"type:varchar(100);not null;index" json:"barcode"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// Borrower 用户表
+type Borrower struct {
+	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name      string    `gorm:"type:varchar(50);not null" json:"name"`
+	Phone     string    `gorm:"type:varchar(20);not null;uniqueIndex" json:"phone"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // AutoMigrate 自动迁移数据库表
@@ -80,8 +89,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&Book{},
 		&BorrowRecord{},
 		&BorrowDetail{},
+		&Borrower{},
 	)
 }
-
-
-

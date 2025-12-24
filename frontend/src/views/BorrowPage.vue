@@ -13,20 +13,35 @@
             <el-button type="primary" @click="startBorrow">开始借阅</el-button>
           </div>
 
-          <!-- 借阅表单 -->
-          <div v-else>
-            <el-form :model="form" :rules="rules" ref="formRef" label-width="100px">
-              <el-form-item label="姓名" prop="borrower_name">
-                <el-input v-model="form.borrower_name" placeholder="请输入姓名" />
+          <!-- 用户信息输入 -->
+          <div v-else-if="!userConfirmed" class="user-section">
+            <h3>请输入您的信息</h3>
+            <el-form :model="userForm" :rules="userRules" ref="userFormRef" label-width="100px">
+              <el-form-item label="姓名" prop="name">
+                <el-input v-model="userForm.name" placeholder="请输入姓名" />
               </el-form-item>
-              <el-form-item label="电话" prop="borrower_phone">
-                <el-input v-model="form.borrower_phone" placeholder="请输入电话" />
+              <el-form-item label="电话" prop="phone">
+                <el-input v-model="userForm.phone" placeholder="请输入电话" />
               </el-form-item>
             </el-form>
+            <el-button type="primary" size="large" @click="handleConfirmUser">确定</el-button>
+          </div>
+
+          <!-- 借阅操作 -->
+          <div v-else>
+            <!-- 用户信息展示 -->
+            <div class="user-info-section">
+              <h3>借阅人信息</h3>
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="姓名">{{ currentUser.name }}</el-descriptions-item>
+                <el-descriptions-item label="电话">{{ currentUser.phone }}</el-descriptions-item>
+              </el-descriptions>
+              <el-button type="text" @click="handleResetUser" style="margin-top: 10px">更换借阅人</el-button>
+            </div>
 
             <!-- 扫码区域 -->
             <div class="scan-section">
-              <h3>扫码借阅</h3>
+              <h3>请扫描图书一维码</h3>
               <el-input
                 v-model="scanBarcode"
                 placeholder="请使用扫码枪扫描图书一维码"
@@ -41,10 +56,16 @@
             <div class="book-list-section" v-if="borrowedBooks.length > 0">
               <h3>已借阅图书（{{ borrowedBooks.length }}本）</h3>
               <el-table :data="borrowedBooks" border>
+                <el-table-column type="index" label="序号" width="60" />
                 <el-table-column prop="barcode" label="一维码" />
                 <el-table-column prop="name" label="书名">
                   <template #default="scope">
                     {{ scope.row.name || scope.row.barcode }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="100">
+                  <template #default="scope">
+                    <el-button type="danger" size="small" @click="handleRemoveBook(scope.$index)">删除</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -52,7 +73,7 @@
 
             <!-- 操作按钮 -->
             <div class="action-section">
-              <el-button type="success" size="large" @click="handleSubmit" :disabled="borrowedBooks.length === 0">完成借阅</el-button>
+              <el-button type="success" size="large" @click="handleComplete" :disabled="borrowedBooks.length === 0">完成借阅</el-button>
               <el-button size="large" @click="handleReset">重置</el-button>
             </div>
           </div>
@@ -63,35 +84,36 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, nextTick, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import QRCode from 'qrcode'
-import { onBeforeUnmount } from 'vue'
 import { borrowApi } from '../api/borrow'
 
 const showQRCode = ref(true)
 const qrcodeRef = ref(null)
-const formRef = ref(null)
+const userFormRef = ref(null)
 const scanInput = ref(null)
+const userConfirmed = ref(false)
+const currentUser = ref(null)
 
-const form = reactive({
-  borrower_name: '',
-  borrower_phone: ''
+const userForm = reactive({
+  name: '',
+  phone: ''
 })
 
-const rules = {
-  borrower_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  borrower_phone: [{ required: true, message: '请输入电话', trigger: 'blur' }]
+const userRules = {
+  name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+  phone: [{ required: true, message: '请输入电话', trigger: 'blur' }]
 }
 
 const scanBarcode = ref('')
 const borrowedBooks = ref([])
+let refreshTimer = null
 
 const generateQRCode = async () => {
   if (qrcodeRef.value) {
     const url = window.location.href
     try {
-      // 清空之前的内容
       qrcodeRef.value.innerHTML = ''
       await QRCode.toCanvas(qrcodeRef.value, url, {
         width: 200,
@@ -99,7 +121,6 @@ const generateQRCode = async () => {
       })
     } catch (error) {
       console.error('生成二维码失败', error)
-      // 如果canvas失败，尝试使用img
       try {
         const dataUrl = await QRCode.toDataURL(url, { width: 200, margin: 2 })
         qrcodeRef.value.innerHTML = `<img src="${dataUrl}" alt="二维码" />`
@@ -110,11 +131,65 @@ const generateQRCode = async () => {
   }
 }
 
-const startBorrow = () => {
+const startBorrow = async () => {
   showQRCode.value = false
-  nextTick(() => {
-    scanInput.value?.focus()
-  })
+  // 检查是否有未完成的借阅
+  await loadBorrowData()
+  if (currentUser.value) {
+    userConfirmed.value = true
+    nextTick(() => {
+      scanInput.value?.focus()
+    })
+  } else {
+    nextTick(() => {
+      userFormRef.value?.clearValidate()
+    })
+  }
+}
+
+const loadBorrowData = async () => {
+  try {
+    const result = await borrowApi.getBorrowUser()
+    if (result.user) {
+      currentUser.value = result.user
+      borrowedBooks.value = result.books || []
+      userConfirmed.value = true
+    }
+  } catch (error) {
+    // 忽略错误，可能是Redis中没有数据
+  }
+}
+
+const handleConfirmUser = async () => {
+  try {
+    await userFormRef.value.validate()
+    
+    try {
+      await borrowApi.setBorrowUser({
+        name: userForm.name.trim(),
+        phone: userForm.phone.trim()
+      })
+      
+      currentUser.value = {
+        name: userForm.name.trim(),
+        phone: userForm.phone.trim()
+      }
+      userConfirmed.value = true
+      borrowedBooks.value = []
+      
+      ElMessage.success('用户信息已保存')
+      nextTick(() => {
+        scanInput.value?.focus()
+      })
+      
+      // 开始定时刷新
+      startRefreshTimer()
+    } catch (error) {
+      ElMessage.error(error.message || '保存用户信息失败')
+    }
+  } catch (error) {
+    // 表单验证失败
+  }
 }
 
 const handleScan = async () => {
@@ -134,45 +209,36 @@ const handleScan = async () => {
   }
 
   try {
-    // 调用扫码接口（不验证图书是否存在）
-    const result = await borrowApi.scan({ barcode })
-    
-    borrowedBooks.value.push({
-      barcode: result.barcode,
-      name: result.name || null
-    })
-    
+    const result = await borrowApi.addBorrowBook({ barcode })
+    await loadBorrowData() // 重新加载列表
     ElMessage.success('添加成功')
     scanBarcode.value = ''
     scanInput.value?.focus()
   } catch (error) {
-    // 即使图书不存在也添加到列表
-    borrowedBooks.value.push({
-      barcode: barcode,
-      name: null
-    })
-    ElMessage.success('已添加')
+    ElMessage.error(error.message || '添加失败')
     scanBarcode.value = ''
     scanInput.value?.focus()
   }
 }
 
-const handleSubmit = async () => {
+const handleRemoveBook = async (index) => {
   try {
-    await formRef.value.validate()
-    
-    if (borrowedBooks.value.length === 0) {
-      ElMessage.warning('请至少添加一本图书')
-      return
-    }
+    await borrowApi.removeBorrowBook({ index })
+    await loadBorrowData() // 重新加载列表
+    ElMessage.success('删除成功')
+  } catch (error) {
+    ElMessage.error(error.message || '删除失败')
+  }
+}
 
-    const barcodes = borrowedBooks.value.map(b => b.barcode)
-    await borrowApi.create({
-      borrower_name: form.borrower_name,
-      borrower_phone: form.borrower_phone,
-      barcodes: barcodes
-    })
+const handleComplete = async () => {
+  if (borrowedBooks.value.length === 0) {
+    ElMessage.warning('请至少添加一本图书')
+    return
+  }
 
+  try {
+    await borrowApi.completeBorrow({ use_redis: true })
     ElMessage.success('借阅成功')
     handleReset()
     showQRCode.value = true
@@ -185,15 +251,43 @@ const handleSubmit = async () => {
 }
 
 const handleReset = () => {
-  form.borrower_name = ''
-  form.borrower_phone = ''
+  userForm.name = ''
+  userForm.phone = ''
   scanBarcode.value = ''
   borrowedBooks.value = []
-  formRef.value?.resetFields()
+  currentUser.value = null
+  userConfirmed.value = false
+  userFormRef.value?.resetFields()
+  stopRefreshTimer()
+}
+
+const handleResetUser = () => {
+  userConfirmed.value = false
+  currentUser.value = null
+  borrowedBooks.value = []
+  stopRefreshTimer()
+}
+
+const startRefreshTimer = () => {
+  stopRefreshTimer()
+  refreshTimer = setInterval(async () => {
+    await loadBorrowData()
+  }, 2000) // 每2秒刷新一次
+}
+
+const stopRefreshTimer = () => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 }
 
 onMounted(() => {
   generateQRCode()
+})
+
+onUnmounted(() => {
+  stopRefreshTimer()
 })
 </script>
 
@@ -221,6 +315,23 @@ onMounted(() => {
   padding: 40px 0;
 }
 
+.user-section {
+  padding: 40px 0;
+  text-align: center;
+}
+
+.user-section h3 {
+  margin-bottom: 30px;
+  font-size: 18px;
+}
+
+.user-info-section {
+  margin-bottom: 30px;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 4px;
+}
+
 .scan-section {
   margin: 30px 0;
   padding: 20px;
@@ -242,4 +353,3 @@ onMounted(() => {
   min-width: 120px;
 }
 </style>
-

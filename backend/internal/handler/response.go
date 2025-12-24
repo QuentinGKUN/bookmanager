@@ -29,6 +29,3 @@ func Error(c *app.RequestContext, code int, message string) {
 		Data:    nil,
 	})
 }
-
-
-

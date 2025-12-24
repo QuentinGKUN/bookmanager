@@ -119,6 +119,3 @@ func (h *BookshelfHandler) Delete(ctx context.Context, c *app.RequestContext) {
 
 	Success(c, nil)
 }
-
-
-

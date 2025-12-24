@@ -1,7 +1,7 @@
 import api from './index'
 
 export const borrowApi = {
-  // 创建借阅记录
+  // 创建借阅记录（兼容旧接口）
   create(data) {
     return api.post('/borrow', data)
   },
@@ -17,9 +17,41 @@ export const borrowApi = {
   getBorrowerByPhone(data) {
     return api.post('/borrow/get-borrower', data)
   },
-  // 归还
+  // 归还（兼容旧接口）
   returnBook(data) {
     return api.post('/borrow/return', data)
+  },
+  // 新的借阅API（使用Redis）
+  setBorrowUser(data) {
+    return api.post('/borrow/user', data)
+  },
+  getBorrowUser() {
+    return api.get('/borrow/user')
+  },
+  addBorrowBook(data) {
+    return api.post('/borrow/book', data)
+  },
+  removeBorrowBook(data) {
+    return api.delete('/borrow/book', { data: data })
+  },
+  completeBorrow(data) {
+    return api.post('/borrow/complete', data)
+  },
+  // 新的归还API（使用Redis）
+  setReturnUser(data) {
+    return api.post('/return/user', data)
+  },
+  getReturnUser() {
+    return api.get('/return/user')
+  },
+  addReturnBook(data) {
+    return api.post('/return/book', data)
+  },
+  removeReturnBook(data) {
+    return api.delete('/return/book', { data: data })
+  },
+  completeReturn(data) {
+    return api.post('/return/complete', data)
   }
 }
 

@@ -119,6 +119,3 @@ func (h *ShelfLayerHandler) Delete(ctx context.Context, c *app.RequestContext) {
 
 	Success(c, nil)
 }
-
-
-
